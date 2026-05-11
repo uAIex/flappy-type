@@ -20,7 +20,6 @@ const nextLetter = document.getElementById("nextLetter");
 const typedDisplay = document.getElementById("typedDisplay");
 const wordsScore = document.getElementById("wordsScore");
 const pipesScore = document.getElementById("pipesScore");
-const pipesHeaderScore = document.getElementById("pipesHeaderScore");
 const lettersScore = document.getElementById("lettersScore");
 const bestScore = document.getElementById("bestScore");
 
@@ -442,7 +441,6 @@ function syncHud() {
   nextLetter.textContent = targetLetters()[state.letterIndex] || state.currentWord[0] || "";
   wordsScore.textContent = String(state.wordsCleared);
   pipesScore.textContent = String(state.pipesCleared);
-  pipesHeaderScore.textContent = String(state.pipesCleared);
   lettersScore.textContent = String(state.lettersHit);
   bestScore.textContent = String(state.best);
   wpmBurst.textContent = String(state.bestBurstWpm);
