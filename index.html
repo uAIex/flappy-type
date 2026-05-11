@@ -14,6 +14,7 @@
           <h1>Flappy Type</h1>
         </div>
         <div class="hero-badge">
+          <a class="github-button" href="https://github.com/uAIex/flappy-type" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star" data-size="large" aria-label="Star uAIex/flappy-type on GitHub">Star</a>
           <label class="difficulty-control">
             <span>Difficulty <strong id="difficultyValue">4</strong>/20</span>
             <input id="difficultySlider" type="range" min="1" max="20" value="4">
@@ -25,6 +26,10 @@
           <div class="burst-readout" aria-live="polite">
             <span>WPM Burst</span>
             <strong id="wpmBurst">0</strong>
+          </div>
+          <div class="burst-readout" aria-live="polite">
+            <span>Pipes</span>
+            <strong id="pipesHeaderScore">0</strong>
           </div>
         </div>
       </header>
@@ -109,5 +114,6 @@
 
     <script src="words.js"></script>
     <script src="script.js"></script>
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
   </body>
 </html>

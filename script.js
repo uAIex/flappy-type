@@ -19,11 +19,12 @@ const nextLetter = document.getElementById("nextLetter");
 const typedDisplay = document.getElementById("typedDisplay");
 const wordsScore = document.getElementById("wordsScore");
 const pipesScore = document.getElementById("pipesScore");
+const pipesHeaderScore = document.getElementById("pipesHeaderScore");
 const lettersScore = document.getElementById("lettersScore");
 const bestScore = document.getElementById("bestScore");
 
 const CONFIG = {
-  baseGravity: 330,
+  baseGravity: 280,
   defaultDifficulty: 4,
   defaultWordGroups: 1,
   wordsPerGroup: 1000,
@@ -70,6 +71,9 @@ const state = {
   typedResults: [],
   correctLetterTimes: [],
   bestBurstWpm: 0,
+  hasArmor: true,
+  armorInvincibleTimer: 0,
+  armorShards: [],
   spawnTimer: 0,
   pipeSpawnCount: 0,
   nextBreatherAt: 0,
@@ -148,6 +152,9 @@ function resetGame() {
   state.lettersHit = 0;
   state.correctLetterTimes = [];
   state.bestBurstWpm = 0;
+  state.hasArmor = true;
+  state.armorInvincibleTimer = 0;
+  state.armorShards = [];
   state.spawnTimer = 0;
   state.pipeSpawnCount = 0;
   state.nextBreatherAt = randomBreatherInterval();
@@ -212,7 +219,7 @@ function showOverlay(label, title, text) {
 }
 
 function currentSpeed() {
-  return CONFIG.baseSpeed + Math.min(state.wordsCleared * 8, 72);
+  return CONFIG.baseSpeed + Math.min(state.wordsCleared * 4, 72);
 }
 
 function currentGap() {
@@ -330,8 +337,11 @@ function spawnPipe() {
   const minTopHeight = 72;
   const maxTopHeight = groundY - gap - ceilingMargin;
   const topHeight = minTopHeight + Math.random() * Math.max(10, maxTopHeight - minTopHeight);
+  const pipeNumber = state.pipeSpawnCount + 1;
 
   pipes.push({
+    number: pipeNumber,
+    isGolden: pipeNumber % 10 === 0,
     x: canvas.width + CONFIG.pipeWidth,
     width: CONFIG.pipeWidth,
     topHeight,
@@ -403,6 +413,7 @@ function syncHud() {
   nextLetter.textContent = targetLetters()[state.letterIndex] || state.currentWord[0] || "";
   wordsScore.textContent = String(state.wordsCleared);
   pipesScore.textContent = String(state.pipesCleared);
+  pipesHeaderScore.textContent = String(state.pipesCleared);
   lettersScore.textContent = String(state.lettersHit);
   bestScore.textContent = String(state.best);
   wpmBurst.textContent = String(state.bestBurstWpm);
@@ -469,6 +480,54 @@ function hitPipe(pipe) {
   return birdTop < gapTop || birdBottom > gapBottom;
 }
 
+function breakArmor() {
+  state.hasArmor = false;
+  state.armorInvincibleTimer = 3;
+  bird.vy = Math.min(bird.vy, -180);
+
+  const shardColors = ["#e7f7ff", "#a9cde2", "#6f8da5", "#ffffff"];
+  state.armorShards = Array.from({ length: 10 }, (_, index) => ({
+    x: bird.x - 8 + (index % 5) * 5,
+    y: bird.y - 20 + Math.floor(index / 5) * 5,
+    vx: -150 + Math.random() * 210,
+    vy: -210 + Math.random() * 120,
+    size: 3 + Math.random() * 4,
+    rotation: Math.random() * Math.PI,
+    spin: -5 + Math.random() * 10,
+    color: shardColors[index % shardColors.length],
+    life: 1.15
+  }));
+}
+
+function handlePipeHit(pipe) {
+  if (state.armorInvincibleTimer > 0) {
+    pipe.armorBroken = true;
+    return;
+  }
+
+  if (!state.hasArmor || pipe.armorBroken) {
+    gameOver();
+    return;
+  }
+
+  pipe.armorBroken = true;
+  breakArmor();
+}
+
+function updateArmorShards(dt) {
+  state.armorInvincibleTimer = Math.max(0, state.armorInvincibleTimer - dt);
+
+  for (const shard of state.armorShards) {
+    shard.x += shard.vx * dt;
+    shard.y += shard.vy * dt;
+    shard.vy += 760 * dt;
+    shard.rotation += shard.spin * dt;
+    shard.life -= dt;
+  }
+
+  state.armorShards = state.armorShards.filter((shard) => shard.life > 0);
+}
+
 function update(dt) {
   if (state.mode === "countdown") {
     state.worldOffset += currentSpeed() * 0.2 * dt;
@@ -485,12 +544,14 @@ function update(dt) {
 
   if (state.mode !== "running") {
     bird.y += Math.sin(performance.now() / 240) * 0.18;
+    updateArmorShards(dt);
     return;
   }
 
   state.spawnTimer += dt;
   state.worldOffset += currentSpeed() * dt;
   updateBurstWpm();
+  updateArmorShards(dt);
 
   if (state.spawnTimer >= state.nextPipeSpawnSeconds) {
     state.spawnTimer = 0;
@@ -515,7 +576,7 @@ function update(dt) {
     }
 
     if (hitPipe(pipe)) {
-      gameOver();
+      handlePipeHit(pipe);
     }
   }
 
@@ -536,8 +597,8 @@ function drawBackground() {
   const groundY = canvas.height - CONFIG.groundHeight;
   drawPixelSky(groundY);
   drawPixelSunAndClouds(groundY);
-  drawPixelLayer(0.22, drawFarPixelChunk);
-  drawPixelLayer(0.42, drawMidPixelChunk);
+  drawAtmosphericLayer(0.22, drawFarPixelChunk, 0.42);
+  drawAtmosphericLayer(0.42, drawMidPixelChunk, 0.68);
   drawPixelLayer(0.72, drawNearPixelChunk);
   drawPixelGround(groundY);
 }
@@ -584,6 +645,13 @@ function drawPixelLayer(scrollFactor, drawChunk) {
     const x = chunkIndex * chunkWidth - offset;
     drawChunk(chunkIndex, x);
   }
+}
+
+function drawAtmosphericLayer(scrollFactor, drawChunk, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  drawPixelLayer(scrollFactor, drawChunk);
+  ctx.restore();
 }
 
 function drawFarPixelChunk(chunkIndex, x) {
@@ -677,17 +745,24 @@ function drawPixelGround(groundY) {
 }
 
 function chunkBiome(chunkIndex) {
-  const phase = positiveModulo(chunkIndex, 8);
+  const cycleLength = 12;
+  const cycle = Math.floor(chunkIndex / cycleLength);
+  const phase = positiveModulo(chunkIndex, cycleLength);
+  const rng = seededRandom(cycle * 257 + 89);
+  const natureLength = 4 + Math.floor(rng() * 3);
+  const toCityLength = 1;
+  const cityLength = 3;
+  const toNatureStart = natureLength + toCityLength + cityLength;
 
-  if (phase <= 1) {
+  if (phase < natureLength) {
     return "nature";
   }
 
-  if (phase <= 2) {
+  if (phase < natureLength + toCityLength) {
     return "toCity";
   }
 
-  if (phase <= 5) {
+  if (phase < toNatureStart) {
     return "city";
   }
 
@@ -832,19 +907,52 @@ function drawPipes() {
   for (const pipe of pipes) {
     const capHeight = 24;
     const gapBottom = pipe.topHeight + pipe.gap;
+    const bodyColor = pipe.isGolden ? "#f4bd2f" : "#35ad61";
+    const capColor = pipe.isGolden ? "#d99a18" : "#2c9553";
+    const shineColor = pipe.isGolden ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.18)";
 
-    ctx.fillStyle = "#35ad61";
+    ctx.fillStyle = bodyColor;
     ctx.fillRect(pipe.x, 0, pipe.width, pipe.topHeight);
     ctx.fillRect(pipe.x, gapBottom, pipe.width, groundY - gapBottom);
 
-    ctx.fillStyle = "#2c9553";
+    ctx.fillStyle = capColor;
     ctx.fillRect(pipe.x - 4, pipe.topHeight - capHeight, pipe.width + 8, capHeight);
     ctx.fillRect(pipe.x - 4, gapBottom, pipe.width + 8, capHeight);
 
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillStyle = shineColor;
     ctx.fillRect(pipe.x + 12, 0, 10, pipe.topHeight);
     ctx.fillRect(pipe.x + 12, gapBottom, 10, groundY - gapBottom);
+
+    if (pipe.isGolden) {
+      drawGoldenPipeNumber(pipe, gapBottom, groundY);
+    }
   }
+}
+
+function drawGoldenPipeNumber(pipe, gapBottom, groundY) {
+  const topLabelY = Math.max(34, pipe.topHeight - 54);
+  const bottomLabelY = Math.min(groundY - 34, gapBottom + 54);
+  const labelX = pipe.x + pipe.width / 2;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = '800 26px "Trebuchet MS", sans-serif';
+  ctx.fillStyle = "rgba(94, 57, 0, 0.9)";
+  ctx.strokeStyle = "rgba(255, 244, 183, 0.95)";
+  ctx.lineWidth = 4;
+
+  if (pipe.topHeight > 74) {
+    ctx.strokeText(String(pipe.number), labelX, topLabelY);
+    ctx.fillText(String(pipe.number), labelX, topLabelY);
+  }
+
+  if (groundY - gapBottom > 74) {
+    ctx.strokeText(String(pipe.number), labelX, bottomLabelY);
+    ctx.fillText(String(pipe.number), labelX, bottomLabelY);
+  }
+
+  ctx.restore();
 }
 
 function drawParachute() {
@@ -940,7 +1048,58 @@ function drawBird() {
   ctx.arc(7, -4, 2.2, 0, Math.PI * 2);
   ctx.fill();
 
+  if (state.hasArmor) {
+    drawBirdArmor();
+  }
+
   ctx.restore();
+}
+
+function drawBirdArmor() {
+  const shine = ctx.createLinearGradient(-15, -23, 14, -3);
+  shine.addColorStop(0, "#f3fbff");
+  shine.addColorStop(0.48, "#a9cde2");
+  shine.addColorStop(1, "#5d7f99");
+
+  ctx.fillStyle = shine;
+  ctx.strokeStyle = "#3f6378";
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(-15, -9);
+  ctx.lineTo(-10, -19);
+  ctx.lineTo(0, -23);
+  ctx.lineTo(11, -20);
+  ctx.lineTo(17, -11);
+  ctx.quadraticCurveTo(7, -15, -2, -14);
+  ctx.quadraticCurveTo(-10, -14, -15, -9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#eaf8ff";
+  ctx.fillRect(-8, -18, 6, 3);
+  ctx.fillRect(2, -20, 7, 3);
+
+  ctx.fillStyle = "rgba(34, 58, 74, 0.74)";
+  ctx.fillRect(7, -12, 11, 4);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.fillRect(9, -12, 5, 1);
+}
+
+function drawArmorShards() {
+  for (const shard of state.armorShards) {
+    ctx.save();
+    ctx.translate(shard.x, shard.y);
+    ctx.rotate(shard.rotation);
+    ctx.globalAlpha = Math.max(0, Math.min(1, shard.life));
+    ctx.fillStyle = shard.color;
+    ctx.strokeStyle = "rgba(55, 82, 102, 0.45)";
+    ctx.lineWidth = 1;
+    ctx.fillRect(-shard.size / 2, -shard.size / 2, shard.size, shard.size * 0.72);
+    ctx.strokeRect(-shard.size / 2, -shard.size / 2, shard.size, shard.size * 0.72);
+    ctx.restore();
+  }
 }
 
 function drawCountdown() {
@@ -1068,6 +1227,7 @@ function render() {
   drawPipes();
   drawParachute();
   drawBird();
+  drawArmorShards();
   drawPhraseBanner();
   drawCountdown();
 }
