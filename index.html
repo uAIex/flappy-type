@@ -13,29 +13,29 @@
           <p class="eyebrow">Typing Game</p>
           <h1>Flappy Type</h1>
         </div>
-        <div class="hero-badge">
-          <a class="github-button" href="https://github.com/uAIex/flappy-type" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star" data-size="large" aria-label="Star uAIex/flappy-type on GitHub">Star</a>
-          <label class="difficulty-control">
-            <span>Difficulty <strong id="difficultyValue">4</strong>/20</span>
-            <input id="difficultySlider" type="range" min="1" max="20" value="4">
-          </label>
-          <label class="difficulty-control">
-            <span>Words <strong id="wordCountValue">1</strong>k</span>
-            <input id="wordCountSlider" type="range" min="1" max="10" value="1">
-          </label>
-          <div class="burst-readout" aria-live="polite">
-            <span>WPM Burst</span>
-            <strong id="wpmBurst">0</strong>
-          </div>
-          <div class="burst-readout" aria-live="polite">
-            <span>Pipes</span>
-            <strong id="pipesHeaderScore">0</strong>
-          </div>
-        </div>
       </header>
 
       <main class="game-layout">
         <section class="game-panel">
+          <div class="game-toolbar">
+            <a class="github-button" href="https://github.com/uAIex/flappy-type" data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star" data-size="large" aria-label="Star uAIex/flappy-type on GitHub">Star</a>
+            <label class="difficulty-control">
+              <span>Difficulty <strong id="difficultyValue">4</strong>/20</span>
+              <input id="difficultySlider" type="range" min="1" max="20" value="4">
+            </label>
+            <label class="difficulty-control">
+              <span>Words <strong id="wordCountValue">1</strong>k</span>
+              <input id="wordCountSlider" type="range" min="1" max="10" value="1">
+            </label>
+            <div class="burst-readout" aria-live="polite">
+              <span>WPM Burst</span>
+              <strong id="wpmBurst">0</strong>
+            </div>
+            <div class="burst-readout" aria-live="polite">
+              <span>Pipes</span>
+              <strong id="pipesHeaderScore">0</strong>
+            </div>
+          </div>
           <div class="canvas-frame">
             <canvas
               id="game"

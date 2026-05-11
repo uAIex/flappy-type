@@ -100,14 +100,16 @@ body::after {
   color: #24627f;
 }
 
-.hero-badge {
+.game-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
-.hero-badge span,
+.game-toolbar span,
 .difficulty-control,
 .burst-readout,
 .repeat-pill,
@@ -116,7 +118,7 @@ kbd {
   border-radius: 999px;
 }
 
-.hero-badge span,
+.game-toolbar span,
 .difficulty-control,
 .burst-readout {
   padding: 10px 14px;
@@ -172,7 +174,7 @@ kbd {
 
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 0.95fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -286,6 +288,7 @@ kbd {
 
 .info-panel {
   display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
   gap: 18px;
 }
 
@@ -446,17 +449,13 @@ kbd {
 }
 
 @media (max-width: 1100px) {
-  .game-layout {
-    grid-template-columns: 1fr;
-  }
-
   .hero {
     align-items: start;
     flex-direction: column;
   }
 
-  .hero-badge {
-    justify-content: start;
+  .info-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -501,5 +500,9 @@ kbd {
 
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .info-panel {
+    grid-template-columns: 1fr;
   }
 }
