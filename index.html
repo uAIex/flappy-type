@@ -12,15 +12,20 @@
         <div>
           <p class="eyebrow">Typing Game</p>
           <h1>Flappy Type</h1>
-          <p class="hero-copy">
-            A Flappy Bird-inspired challenge where every correct letter gives your bird a lift.
-            Clear each phrase by typing the word three times with spaces between them, then survive long enough to reach the next one.
-          </p>
         </div>
         <div class="hero-badge">
-          <span>Static HTML</span>
-          <span>Vanilla JS</span>
-          <span>GitHub Pages Ready</span>
+          <label class="difficulty-control">
+            <span>Difficulty <strong id="difficultyValue">4</strong>/20</span>
+            <input id="difficultySlider" type="range" min="1" max="20" value="4">
+          </label>
+          <label class="difficulty-control">
+            <span>Words <strong id="wordCountValue">1</strong>k</span>
+            <input id="wordCountSlider" type="range" min="1" max="10" value="1">
+          </label>
+          <div class="burst-readout" aria-live="polite">
+            <span>WPM Burst</span>
+            <strong id="wpmBurst">0</strong>
+          </div>
         </div>
       </header>
 
@@ -39,10 +44,10 @@
                 <p class="eyebrow" id="overlayLabel">Ready</p>
                 <h2 id="overlayTitle">Start Flying</h2>
                 <p id="overlayText">
-                  Type the full phrase, including spaces. Correct keys lift the bird, and mistakes flash red without moving the target.
+                  Type the repeated word sequence. Correct letters lift the bird, and mistakes flash red without moving the target.
                 </p>
                 <button id="actionButton" type="button">Start Game</button>
-                <p class="overlay-tip">Keyboard: letters and <kbd>Space</kbd> to flap, <kbd>Enter</kbd> to restart</p>
+                <p class="overlay-tip">Keyboard: letters to flap, <kbd>Enter</kbd> to restart</p>
               </div>
             </div>
           </div>
@@ -57,7 +62,7 @@
             </div>
             <div class="repeat-track" id="repeatTrack" aria-label="Word repetition progress"></div>
             <p class="card-note">
-              Type the same word three times with spaces between each copy.
+              Spaces are visual gaps only. Type the letters straight through.
             </p>
           </section>
 
@@ -66,7 +71,7 @@
             <div class="next-letter" id="nextLetter">a</div>
             <div class="typed-display" id="typedDisplay"></div>
             <p class="card-note">
-              Green marks correct keys. Red marks the current target after a mistype.
+              Green marks correct letters. Red marks missed letters. Backspace undoes the last slot.
             </p>
           </section>
 
@@ -93,9 +98,9 @@
             <p class="eyebrow">How It Works</p>
             <ul>
               <li>The bird rises a little for every correct letter.</li>
-              <li>Spaces between repeated words count as targets.</li>
+              <li>Spaces between repeated words are visual gaps only.</li>
               <li>Hit a pipe or the ground and the run ends.</li>
-              <li>The word pool uses 500 common English words.</li>
+              <li>The word pool uses the local Google common-words list.</li>
             </ul>
           </section>
         </aside>

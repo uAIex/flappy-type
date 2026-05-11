@@ -108,18 +108,66 @@ body::after {
 }
 
 .hero-badge span,
+.difficulty-control,
+.burst-readout,
 .repeat-pill,
 button,
 kbd {
   border-radius: 999px;
 }
 
-.hero-badge span {
+.hero-badge span,
+.difficulty-control,
+.burst-readout {
   padding: 10px 14px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(16, 68, 92, 0.1);
   box-shadow: var(--shadow);
   font-size: 0.92rem;
+}
+
+.difficulty-control {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 150px);
+  align-items: center;
+  gap: 12px;
+}
+
+.difficulty-control span {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.difficulty-control input {
+  width: 100%;
+  accent-color: #ffd64d;
+  cursor: pointer;
+}
+
+.burst-readout {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.burst-readout span {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.burst-readout strong {
+  min-width: 2.4ch;
+  color: #163244;
+  font-size: 1.15rem;
+  line-height: 1;
+  text-align: right;
 }
 
 .game-layout {
@@ -157,6 +205,7 @@ canvas {
   aspect-ratio: 16 / 9;
   border-radius: 20px;
   background: linear-gradient(180deg, #93e8ff 0%, #ebfbff 68%, #f8df9d 100%);
+  image-rendering: pixelated;
 }
 
 .overlay {
@@ -352,9 +401,9 @@ kbd {
 }
 
 .typed-letter.is-next {
-  background: rgba(255, 139, 66, 0.16);
-  color: var(--accent-strong);
-  outline: 2px solid rgba(255, 139, 66, 0.25);
+  background: rgba(255, 214, 77, 0.32);
+  color: #6f5200;
+  outline: 2px solid rgba(218, 170, 0, 0.34);
 }
 
 .typed-letter.is-gap {

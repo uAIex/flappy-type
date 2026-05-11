@@ -1,11 +1,17 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
 
 const overlay = document.getElementById("overlay");
 const overlayLabel = document.getElementById("overlayLabel");
 const overlayTitle = document.getElementById("overlayTitle");
 const overlayText = document.getElementById("overlayText");
 const actionButton = document.getElementById("actionButton");
+const difficultySlider = document.getElementById("difficultySlider");
+const difficultyValue = document.getElementById("difficultyValue");
+const wordCountSlider = document.getElementById("wordCountSlider");
+const wordCountValue = document.getElementById("wordCountValue");
+const wpmBurst = document.getElementById("wpmBurst");
 
 const wordDisplay = document.getElementById("wordDisplay");
 const repeatTrack = document.getElementById("repeatTrack");
@@ -17,7 +23,11 @@ const lettersScore = document.getElementById("lettersScore");
 const bestScore = document.getElementById("bestScore");
 
 const CONFIG = {
-  gravity: 750,
+  baseGravity: 330,
+  defaultDifficulty: 4,
+  defaultWordGroups: 1,
+  wordsPerGroup: 1000,
+  gravityStep: 50,
   flapBoost: 145,
   maxRiseSpeed: -420,
   maxFallSpeed: 700,
@@ -27,9 +37,14 @@ const CONFIG = {
   pipeWidth: 96,
   pipeGap: 182,
   pipeSpawnSeconds: 1.65,
+  pipeBreatherMultiplier: 2.25,
+  pipeBreatherMin: 3,
+  pipeBreatherMax: 5,
   baseSpeed: 215,
   wordRepeats: 3,
-  countdownSeconds: 5
+  countdownSeconds: 3,
+  burstWindowMs: 15000,
+  backgroundChunkWidth: 280
 };
 
 const bird = {
@@ -51,13 +66,16 @@ const state = {
   previousWord: "",
   repeatIndex: 0,
   charIndex: 0,
-  phraseIndex: 0,
+  letterIndex: 0,
+  typedResults: [],
+  correctLetterTimes: [],
+  bestBurstWpm: 0,
   spawnTimer: 0,
+  pipeSpawnCount: 0,
+  nextBreatherAt: 0,
+  nextPipeSpawnSeconds: CONFIG.pipeSpawnSeconds,
   lastTime: 0,
   worldOffset: 0,
-  missFlash: 0,
-  wrongFlashIndex: -1,
-  wrongFlashTimer: 0,
   countdownLeft: CONFIG.countdownSeconds
 };
 
@@ -91,8 +109,13 @@ function shuffle(values) {
   return copy;
 }
 
+function activeWords() {
+  const requestedCount = currentWordGroups() * CONFIG.wordsPerGroup;
+  return GOOGLE_10000_WORDS.slice(0, requestedCount);
+}
+
 function refillWordBag() {
-  state.wordBag = shuffle(TOP_500_WORDS.filter((word) => word !== state.previousWord));
+  state.wordBag = shuffle(activeWords().filter((word) => word !== state.previousWord));
 }
 
 function nextWord() {
@@ -105,9 +128,10 @@ function nextWord() {
   state.currentWord = picked;
   state.repeatIndex = 0;
   state.charIndex = 0;
-  state.phraseIndex = 0;
-  state.wrongFlashIndex = -1;
-  state.wrongFlashTimer = 0;
+  state.letterIndex = 0;
+  state.typedResults = [];
+  state.correctLetterTimes = [];
+  state.bestBurstWpm = 0;
 }
 
 function resetBird() {
@@ -122,12 +146,14 @@ function resetGame() {
   state.wordsCleared = 0;
   state.pipesCleared = 0;
   state.lettersHit = 0;
+  state.correctLetterTimes = [];
+  state.bestBurstWpm = 0;
   state.spawnTimer = 0;
+  state.pipeSpawnCount = 0;
+  state.nextBreatherAt = randomBreatherInterval();
+  state.nextPipeSpawnSeconds = CONFIG.pipeSpawnSeconds;
   state.lastTime = 0;
   state.worldOffset = 0;
-  state.missFlash = 0;
-  state.wrongFlashIndex = -1;
-  state.wrongFlashTimer = 0;
   state.countdownLeft = CONFIG.countdownSeconds;
   pipes = [];
 
@@ -138,7 +164,7 @@ function resetGame() {
   showOverlay(
     "Ready",
     "Start Flying",
-    "Type the full phrase, including the spaces between words. Correct keys lift the bird, and mistakes flash red without moving the target."
+    "Type the repeated word sequence. Correct letters lift the bird, the gaps are just visual, and mistakes flash red without moving the target."
   );
 }
 
@@ -161,7 +187,7 @@ function startGame() {
 function beginRun() {
   state.mode = "running";
   state.lastTime = 0;
-  state.spawnTimer = CONFIG.pipeSpawnSeconds * 0.55;
+  state.spawnTimer = state.nextPipeSpawnSeconds * 0.55;
   bird.vy = 0;
 }
 
@@ -193,14 +219,108 @@ function currentGap() {
   return Math.max(146, CONFIG.pipeGap - Math.min(state.wordsCleared * 2.5, 34));
 }
 
+function randomBreatherInterval() {
+  const range = CONFIG.pipeBreatherMax - CONFIG.pipeBreatherMin + 1;
+  return CONFIG.pipeBreatherMin + Math.floor(Math.random() * range);
+}
+
+function scheduleNextPipeDelay() {
+  state.pipeSpawnCount += 1;
+
+  if (state.pipeSpawnCount >= state.nextBreatherAt) {
+    state.nextPipeSpawnSeconds = CONFIG.pipeSpawnSeconds * CONFIG.pipeBreatherMultiplier;
+    state.nextBreatherAt = state.pipeSpawnCount + randomBreatherInterval();
+    return;
+  }
+
+  state.nextPipeSpawnSeconds = CONFIG.pipeSpawnSeconds;
+}
+
+function currentDifficulty() {
+  return Number(difficultySlider.value || CONFIG.defaultDifficulty);
+}
+
+function currentWordGroups() {
+  return Number(wordCountSlider.value || CONFIG.defaultWordGroups);
+}
+
+function currentGravity() {
+  return CONFIG.baseGravity + (currentDifficulty() - CONFIG.defaultDifficulty) * CONFIG.gravityStep;
+}
+
+function syncDifficulty() {
+  difficultyValue.textContent = String(currentDifficulty());
+}
+
+function syncWordCount() {
+  wordCountValue.textContent = String(currentWordGroups());
+}
+
+function updateWordCount() {
+  syncWordCount();
+  refillWordBag();
+}
+
 function targetPhrase() {
   return Array(CONFIG.wordRepeats).fill(state.currentWord).join(" ");
 }
 
 function syncPhrasePosition() {
-  const segmentLength = state.currentWord.length + 1;
-  state.repeatIndex = Math.min(CONFIG.wordRepeats - 1, Math.floor(state.phraseIndex / segmentLength));
-  state.charIndex = state.phraseIndex - state.repeatIndex * segmentLength;
+  state.repeatIndex = Math.min(CONFIG.wordRepeats - 1, Math.floor(state.letterIndex / state.currentWord.length));
+  state.charIndex = state.letterIndex - state.repeatIndex * state.currentWord.length;
+}
+
+function targetLetters() {
+  return state.currentWord.repeat(CONFIG.wordRepeats);
+}
+
+function phraseIndexForLetterIndex(letterIndex) {
+  const wordLength = state.currentWord.length;
+  const repeat = Math.min(CONFIG.wordRepeats - 1, Math.floor(letterIndex / wordLength));
+  const char = letterIndex - repeat * wordLength;
+
+  return repeat * (wordLength + 1) + char;
+}
+
+function letterIndexForPhraseIndex(phraseIndex) {
+  const wordLength = state.currentWord.length;
+  const segmentLength = wordLength + 1;
+  const repeat = Math.floor(phraseIndex / segmentLength);
+  const char = phraseIndex - repeat * segmentLength;
+
+  if (char >= wordLength) {
+    return -1;
+  }
+
+  return repeat * wordLength + char;
+}
+
+function pruneBurstTimes(now = performance.now()) {
+  const cutoff = now - CONFIG.burstWindowMs;
+  state.correctLetterTimes = state.correctLetterTimes.filter((time) => time >= cutoff);
+}
+
+function recordCorrectLetter() {
+  const now = performance.now();
+  pruneBurstTimes(now);
+  state.correctLetterTimes.push(now);
+  updateBurstWpm(now);
+}
+
+function updateBurstWpm(now = performance.now()) {
+  pruneBurstTimes(now);
+  let best = 0;
+
+  for (let i = 2; i < state.correctLetterTimes.length; i += 1) {
+    const elapsedMs = state.correctLetterTimes[i] - state.correctLetterTimes[i - 2];
+
+    if (elapsedMs > 0) {
+      best = Math.max(best, 72000 / elapsedMs);
+    }
+  }
+
+  state.bestBurstWpm = Math.round(best);
+  wpmBurst.textContent = String(state.bestBurstWpm);
 }
 
 function spawnPipe() {
@@ -224,12 +344,17 @@ function bumpBird() {
   bird.vy = Math.max(CONFIG.maxRiseSpeed, bird.vy - CONFIG.flapBoost);
 }
 
-function advanceWord() {
-  state.phraseIndex += 1;
-  state.lettersHit += 1;
-  bumpBird();
+function advanceWord(wasCorrect) {
+  state.typedResults[state.letterIndex] = wasCorrect;
+  state.letterIndex += 1;
 
-  if (state.phraseIndex >= targetPhrase().length) {
+  if (wasCorrect) {
+    state.lettersHit += 1;
+    recordCorrectLetter();
+    bumpBird();
+  }
+
+  if (state.letterIndex >= targetLetters().length) {
     state.wordsCleared += 1;
     nextWord();
   } else {
@@ -240,7 +365,7 @@ function advanceWord() {
 }
 
 function handleCharacterInput(character) {
-  if (!/^[a-z ]$/.test(character) || state.mode === "gameover" || state.mode === "countdown") {
+  if (!/^[a-z]$/.test(character) || state.mode === "gameover" || state.mode === "countdown") {
     return;
   }
 
@@ -249,26 +374,38 @@ function handleCharacterInput(character) {
     return;
   }
 
-  const expected = targetPhrase()[state.phraseIndex];
+  const expected = targetLetters()[state.letterIndex];
+  advanceWord(character === expected);
+}
 
-  if (character === expected) {
-    advanceWord();
-  } else {
-    state.missFlash = 0.22;
-    state.wrongFlashIndex = state.phraseIndex;
-    state.wrongFlashTimer = 0.36;
-    syncHud();
+function undoLastCharacter() {
+  if (state.mode !== "running" || state.letterIndex <= 0) {
+    return;
   }
+
+  const previousIndex = state.letterIndex - 1;
+  const wasCorrect = state.typedResults[previousIndex];
+  state.typedResults.pop();
+  state.letterIndex = previousIndex;
+
+  if (wasCorrect) {
+    state.lettersHit = Math.max(0, state.lettersHit - 1);
+    state.correctLetterTimes.pop();
+    updateBurstWpm();
+  }
+
+  syncPhrasePosition();
+  syncHud();
 }
 
 function syncHud() {
   wordDisplay.textContent = state.currentWord;
-  const nextCharacter = targetPhrase()[state.phraseIndex] || state.currentWord[0] || "";
-  nextLetter.textContent = nextCharacter === " " ? "space" : nextCharacter;
+  nextLetter.textContent = targetLetters()[state.letterIndex] || state.currentWord[0] || "";
   wordsScore.textContent = String(state.wordsCleared);
   pipesScore.textContent = String(state.pipesCleared);
   lettersScore.textContent = String(state.lettersHit);
   bestScore.textContent = String(state.best);
+  wpmBurst.textContent = String(state.bestBurstWpm);
 
   renderRepeatTrack();
   renderTypedPreview();
@@ -296,17 +433,19 @@ function renderRepeatTrack() {
 function renderTypedPreview() {
   typedDisplay.innerHTML = "";
   const phrase = targetPhrase();
+  const activePhraseIndex = phraseIndexForLetterIndex(state.letterIndex);
 
   for (let i = 0; i < phrase.length; i += 1) {
     const span = document.createElement("span");
     span.className = "typed-letter";
-    span.textContent = phrase[i] === " " ? "space" : phrase[i];
+    span.textContent = phrase[i] === " " ? "" : phrase[i];
+    const letterIndex = letterIndexForPhraseIndex(i);
 
-    if (i < state.phraseIndex) {
-      span.classList.add("is-hit");
-    } else if (i === state.wrongFlashIndex && state.wrongFlashTimer > 0) {
-      span.classList.add("is-miss");
-    } else if (i === state.phraseIndex) {
+    if (phrase[i] === " ") {
+      span.classList.add("is-gap");
+    } else if (letterIndex >= 0 && letterIndex < state.letterIndex) {
+      span.classList.add(state.typedResults[letterIndex] ? "is-hit" : "is-miss");
+    } else if (i === activePhraseIndex) {
       span.classList.add("is-next");
     }
 
@@ -351,15 +490,15 @@ function update(dt) {
 
   state.spawnTimer += dt;
   state.worldOffset += currentSpeed() * dt;
-  state.missFlash = Math.max(0, state.missFlash - dt);
-  state.wrongFlashTimer = Math.max(0, state.wrongFlashTimer - dt);
+  updateBurstWpm();
 
-  if (state.spawnTimer >= CONFIG.pipeSpawnSeconds) {
+  if (state.spawnTimer >= state.nextPipeSpawnSeconds) {
     state.spawnTimer = 0;
     spawnPipe();
+    scheduleNextPipeDelay();
   }
 
-  bird.vy = Math.min(CONFIG.maxFallSpeed, bird.vy + CONFIG.gravity * dt);
+  bird.vy = Math.min(CONFIG.maxFallSpeed, bird.vy + currentGravity() * dt);
   bird.y += bird.vy * dt;
   bird.tilt = Math.max(-0.65, Math.min(1.2, bird.vy / 340));
 
@@ -395,67 +534,296 @@ function update(dt) {
 
 function drawBackground() {
   const groundY = canvas.height - CONFIG.groundHeight;
-  const horizon = groundY - 82;
+  drawPixelSky(groundY);
+  drawPixelSunAndClouds(groundY);
+  drawPixelLayer(0.22, drawFarPixelChunk);
+  drawPixelLayer(0.42, drawMidPixelChunk);
+  drawPixelLayer(0.72, drawNearPixelChunk);
+  drawPixelGround(groundY);
+}
 
+function drawPixelSky(groundY) {
   const sky = ctx.createLinearGradient(0, 0, 0, groundY);
-  sky.addColorStop(0, "#8fe8ff");
-  sky.addColorStop(0.64, "#e7fbff");
-  sky.addColorStop(1, "#ffe9ab");
+  sky.addColorStop(0, "#73d7f5");
+  sky.addColorStop(0.42, "#b8f0ee");
+  sky.addColorStop(0.72, "#e3f3d6");
+  sky.addColorStop(1, "#f5dc96");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, groundY);
+}
 
-  ctx.save();
-  ctx.globalAlpha = 0.72;
-  ctx.fillStyle = "#fff7d8";
-  ctx.beginPath();
-  ctx.arc(780, 98, 42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+function drawPixelSunAndClouds(groundY) {
+  const sunX = positiveModulo(760 - state.worldOffset * 0.035, canvas.width + 260) - 90;
+  pixelRect(sunX, 72, 54, 54, "#fff2a6");
+  pixelRect(sunX + 8, 64, 38, 8, "#fff7c8");
+  pixelRect(sunX + 8, 126, 38, 8, "#f9d77a");
+  pixelRect(sunX - 8, 84, 8, 30, "#fff7c8");
+  pixelRect(sunX + 54, 84, 8, 30, "#f4c560");
 
-  drawCloud(130 - (state.worldOffset * 0.12 % 1120), 110, 1.1);
-  drawCloud(470 - (state.worldOffset * 0.1 % 1180), 80, 0.9);
-  drawCloud(850 - (state.worldOffset * 0.08 % 1260), 145, 1.28);
+  drawPixelLayer(0.13, (chunkIndex, x) => {
+    const rng = seededRandom(chunkIndex * 91 + 17);
+    const cloudCount = rng() > 0.28 ? 1 : 2;
 
-  ctx.fillStyle = "#94c981";
-  drawHill(-80 - (state.worldOffset * 0.14 % 340), horizon + 28, 360, 110);
-  drawHill(210 - (state.worldOffset * 0.14 % 340), horizon + 40, 300, 95);
-  drawHill(520 - (state.worldOffset * 0.14 % 340), horizon + 24, 380, 120);
-  drawHill(840 - (state.worldOffset * 0.14 % 340), horizon + 38, 320, 90);
+    for (let i = 0; i < cloudCount; i += 1) {
+      const cloudX = x + 24 + rng() * 230;
+      const cloudY = 58 + rng() * 98;
+      const scale = rng() > 0.45 ? 1 : 0.72;
+      drawPixelCloud(cloudX, Math.min(cloudY, groundY - 250), scale);
+    }
+  });
+}
 
-  ctx.fillStyle = "#deb35e";
-  ctx.fillRect(0, groundY, canvas.width, CONFIG.groundHeight);
+function drawPixelLayer(scrollFactor, drawChunk) {
+  const chunkWidth = CONFIG.backgroundChunkWidth;
+  const offset = state.worldOffset * scrollFactor;
+  const firstChunk = Math.floor(offset / chunkWidth) - 1;
+  const chunksNeeded = Math.ceil(canvas.width / chunkWidth) + 3;
 
-  ctx.fillStyle = "#c59743";
-  const stripeWidth = 42;
-  const stripeOffset = state.worldOffset * 0.7 % stripeWidth;
-  for (let x = -stripeOffset; x < canvas.width + stripeWidth; x += stripeWidth) {
-    ctx.fillRect(x, groundY + 46, stripeWidth / 2, 14);
+  for (let i = 0; i < chunksNeeded; i += 1) {
+    const chunkIndex = firstChunk + i;
+    const x = chunkIndex * chunkWidth - offset;
+    drawChunk(chunkIndex, x);
   }
 }
 
-function drawCloud(x, y, scale) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.76)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 24, 0, Math.PI * 2);
-  ctx.arc(24, -12, 28, 0, Math.PI * 2);
-  ctx.arc(56, 0, 22, 0, Math.PI * 2);
-  ctx.arc(28, 9, 30, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+function drawFarPixelChunk(chunkIndex, x) {
+  const groundY = canvas.height - CONFIG.groundHeight;
+  const rng = seededRandom(chunkIndex * 131 + 3);
+  const biome = chunkBiome(chunkIndex);
+  const baseY = groundY - 94;
+
+  if (biome === "city" || biome === "toNature") {
+    const buildingCount = 4 + Math.floor(rng() * 3);
+
+    for (let i = 0; i < buildingCount; i += 1) {
+      const width = 42 + Math.floor(rng() * 42);
+      const height = 72 + Math.floor(rng() * 92);
+      const bx = x + i * 76 + Math.floor(rng() * 18);
+      const by = baseY - height;
+      drawPixelBuilding(bx, by, width, height, rng, true);
+    }
+  }
+
+  if (biome === "nature" || biome === "toCity" || biome === "toNature") {
+    const hillColor = biome === "nature" ? "#7bbd78" : "#86ad7f";
+    drawPixelHill(x - 20, baseY + 52, 170, 78, hillColor);
+    drawPixelHill(x + 122, baseY + 70, 220, 104, biome === "nature" ? "#6faa6e" : "#789979");
+    drawPixelHill(x + 258, baseY + 50, 150, 76, hillColor);
+  }
 }
 
-function drawHill(x, y, width, height) {
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.quadraticCurveTo(x + width * 0.25, y - height, x + width * 0.5, y - height * 0.4);
-  ctx.quadraticCurveTo(x + width * 0.72, y - height * 1.05, x + width, y);
-  ctx.lineTo(x + width, canvas.height);
-  ctx.lineTo(x, canvas.height);
-  ctx.closePath();
-  ctx.fill();
+function drawMidPixelChunk(chunkIndex, x) {
+  const groundY = canvas.height - CONFIG.groundHeight;
+  const rng = seededRandom(chunkIndex * 149 + 29);
+  const biome = chunkBiome(chunkIndex);
+
+  if (biome === "city") {
+    drawCityBlock(x, groundY, rng);
+    return;
+  }
+
+  if (biome === "toCity") {
+    drawPixelTrees(x, groundY, rng, 3);
+    drawTownBlock(x + 142, groundY, rng);
+    drawCityBlock(x + 232, groundY, rng, 0.68);
+    return;
+  }
+
+  if (biome === "toNature") {
+    drawCityBlock(x - 12, groundY, rng, 0.7);
+    drawTownBlock(x + 128, groundY, rng);
+    drawPixelTrees(x + 228, groundY, rng, 3);
+    return;
+  }
+
+  drawPixelTrees(x, groundY, rng, 6);
+  drawPixelFence(x, groundY, rng);
+}
+
+function drawNearPixelChunk(chunkIndex, x) {
+  const groundY = canvas.height - CONFIG.groundHeight;
+  const rng = seededRandom(chunkIndex * 181 + 43);
+  const biome = chunkBiome(chunkIndex);
+
+  if (biome === "city") {
+    for (let i = 0; i < 3; i += 1) {
+      const lampX = x + 38 + i * 112 + Math.floor(rng() * 18);
+      drawPixelStreetlight(lampX, groundY);
+    }
+    return;
+  }
+
+  if (biome === "toCity" || biome === "toNature") {
+    drawPixelFence(x, groundY, rng);
+    drawPixelMailbox(x + 62 + rng() * 70, groundY);
+    drawPixelStreetlight(x + 230 + rng() * 38, groundY);
+    return;
+  }
+
+  drawPixelFlowers(x, groundY, rng);
+}
+
+function drawPixelGround(groundY) {
+  pixelRect(0, groundY, canvas.width, CONFIG.groundHeight, "#d6ac5c");
+  pixelRect(0, groundY, canvas.width, 10, "#f3d278");
+  pixelRect(0, groundY + 10, canvas.width, 10, "#bde072");
+
+  const tileSize = 24;
+  const offset = positiveModulo(state.worldOffset * 0.72, tileSize);
+  for (let x = -offset; x < canvas.width + tileSize; x += tileSize) {
+    pixelRect(x + 5, groundY + 45, 12, 10, "#bd9145");
+    pixelRect(x + 2, groundY + 68, 6, 6, "#c99e4e");
+  }
+}
+
+function chunkBiome(chunkIndex) {
+  const phase = positiveModulo(chunkIndex, 8);
+
+  if (phase <= 1) {
+    return "nature";
+  }
+
+  if (phase <= 2) {
+    return "toCity";
+  }
+
+  if (phase <= 5) {
+    return "city";
+  }
+
+  return "toNature";
+}
+
+function drawPixelCloud(x, y, scale) {
+  const s = 8 * scale;
+  pixelRect(x + s * 1, y + s * 1, s * 5, s * 3, "rgba(255, 255, 255, 0.74)");
+  pixelRect(x, y + s * 2, s * 8, s * 3, "rgba(255, 255, 255, 0.82)");
+  pixelRect(x + s * 2, y, s * 3, s * 2, "rgba(255, 255, 255, 0.78)");
+  pixelRect(x + s * 6, y + s * 2, s * 3, s * 2, "rgba(255, 255, 255, 0.68)");
+  pixelRect(x + s * 1, y + s * 5, s * 6, s, "rgba(199, 232, 237, 0.38)");
+}
+
+function drawPixelHill(x, y, width, height, color) {
+  const step = 18;
+  for (let i = 0; i < width; i += step) {
+    const center = width * 0.5;
+    const distance = Math.abs(i - center) / center;
+    const columnHeight = Math.max(18, height * (1 - distance * distance));
+    pixelRect(x + i, y - columnHeight, step + 1, columnHeight, color);
+  }
+}
+
+function drawCityBlock(x, groundY, rng, scale = 1) {
+  const count = 3 + Math.floor(rng() * 3);
+
+  for (let i = 0; i < count; i += 1) {
+    const width = (48 + Math.floor(rng() * 40)) * scale;
+    const height = (92 + Math.floor(rng() * 112)) * scale;
+    const bx = x + i * 70 * scale + Math.floor(rng() * 24);
+    const by = groundY - height - 8;
+    drawPixelBuilding(bx, by, width, height, rng, false);
+  }
+}
+
+function drawPixelBuilding(x, y, width, height, rng, muted) {
+  const colors = muted
+    ? ["#7aa5ae", "#6f9aa8", "#86aab0"]
+    : ["#3f6576", "#4b7482", "#355a6f", "#5d7e88"];
+  const color = colors[Math.floor(rng() * colors.length)];
+  pixelRect(x, y, width, height, color);
+  pixelRect(x, y, width, 7, muted ? "#98bcc1" : "#6f92a1");
+  pixelRect(x + width - 8, y + 10, 8, height - 10, "rgba(22, 50, 68, 0.2)");
+
+  if (rng() > 0.62) {
+    pixelRect(x + 10, y - 10, width - 20, 10, muted ? "#86aab0" : "#587887");
+  }
+
+  for (let wy = y + 18; wy < y + height - 10; wy += 20) {
+    for (let wx = x + 10; wx < x + width - 12; wx += 18) {
+      const lit = rng() > 0.48;
+      pixelRect(wx, wy, 8, 10, lit ? "#ffe78a" : "#294b5e");
+    }
+  }
+}
+
+function drawTownBlock(x, groundY, rng) {
+  const houseColors = ["#d87854", "#d8a65c", "#c96d78", "#7faec2"];
+
+  for (let i = 0; i < 2; i += 1) {
+    const bx = x + i * 86 + Math.floor(rng() * 18);
+    const by = groundY - 70 - Math.floor(rng() * 20);
+    pixelRect(bx, by + 24, 62, 50, houseColors[Math.floor(rng() * houseColors.length)]);
+    pixelRect(bx - 8, by + 12, 78, 14, "#7b4b55");
+    pixelRect(bx + 8, by + 42, 12, 14, "#ffe6a3");
+    pixelRect(bx + 38, by + 42, 12, 14, "#ffe6a3");
+    pixelRect(bx + 25, by + 54, 13, 20, "#5e4051");
+  }
+}
+
+function drawPixelTrees(x, groundY, rng, count) {
+  for (let i = 0; i < count; i += 1) {
+    const treeX = x + 12 + i * 55 + Math.floor(rng() * 22);
+    const trunkHeight = 34 + Math.floor(rng() * 20);
+    const canopySize = 42 + Math.floor(rng() * 22);
+    const baseY = groundY - 8;
+    pixelRect(treeX + canopySize * 0.42, baseY - trunkHeight, 9, trunkHeight, "#7b553d");
+    pixelRect(treeX + canopySize * 0.16, baseY - trunkHeight - canopySize * 0.56, canopySize * 0.72, canopySize * 0.52, "#4d9b5a");
+    pixelRect(treeX, baseY - trunkHeight - canopySize * 0.34, canopySize, canopySize * 0.42, "#5ab967");
+    pixelRect(treeX + canopySize * 0.22, baseY - trunkHeight - canopySize * 0.78, canopySize * 0.6, canopySize * 0.36, "#6bc56f");
+    pixelRect(treeX + canopySize * 0.62, baseY - trunkHeight - canopySize * 0.24, canopySize * 0.2, canopySize * 0.12, "#3f874d");
+  }
+}
+
+function drawPixelFence(x, groundY, rng) {
+  const y = groundY - 38;
+  pixelRect(x, y + 12, CONFIG.backgroundChunkWidth, 7, "#d7c28b");
+  pixelRect(x, y + 28, CONFIG.backgroundChunkWidth, 7, "#bd9f68");
+
+  for (let px = x + Math.floor(rng() * 18); px < x + CONFIG.backgroundChunkWidth; px += 34) {
+    pixelRect(px, y, 8, 42, "#e8d59b");
+  }
+}
+
+function drawPixelFlowers(x, groundY, rng) {
+  for (let i = 0; i < 10; i += 1) {
+    const fx = x + Math.floor(rng() * CONFIG.backgroundChunkWidth);
+    const fy = groundY - 18 - Math.floor(rng() * 14);
+    pixelRect(fx, fy + 6, 3, 8, "#3f8b49");
+    pixelRect(fx - 3, fy, 4, 4, rng() > 0.5 ? "#ffdf5a" : "#f46f70");
+    pixelRect(fx + 2, fy + 1, 4, 4, rng() > 0.5 ? "#f46f70" : "#ffffff");
+  }
+}
+
+function drawPixelStreetlight(x, groundY) {
+  pixelRect(x, groundY - 78, 6, 70, "#3e5360");
+  pixelRect(x - 7, groundY - 82, 20, 6, "#3e5360");
+  pixelRect(x + 7, groundY - 76, 14, 10, "#ffe69a");
+  pixelRect(x + 9, groundY - 66, 10, 4, "rgba(255, 230, 154, 0.42)");
+}
+
+function drawPixelMailbox(x, groundY) {
+  pixelRect(x, groundY - 42, 7, 34, "#6c4b3c");
+  pixelRect(x - 10, groundY - 58, 34, 18, "#477aa0");
+  pixelRect(x - 10, groundY - 64, 24, 8, "#5e99bc");
+  pixelRect(x + 14, groundY - 54, 10, 14, "#315775");
+}
+
+function pixelRect(x, y, width, height, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.ceil(width), Math.ceil(height));
+}
+
+function positiveModulo(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
+function seededRandom(seed) {
+  let value = Math.floor(seed) || 1;
+
+  return () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
 }
 
 function drawPipes() {
@@ -603,6 +971,7 @@ function drawCountdown() {
 
 function drawPhraseBanner() {
   const phrase = targetPhrase();
+  const activePhraseIndex = phraseIndexForLetterIndex(state.letterIndex);
   ctx.save();
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
@@ -628,35 +997,31 @@ function drawPhraseBanner() {
   for (let i = 0; i < phrase.length; i += 1) {
     const char = phrase[i];
     const width = char === " " ? Math.max(20, fontSize * 0.72) : metrics.charWidths[i];
-    const isHit = i < state.phraseIndex;
-    const isMiss = i === state.wrongFlashIndex && state.wrongFlashTimer > 0;
-    const isNext = i === state.phraseIndex;
+    const isGap = char === " ";
+    const letterIndex = letterIndexForPhraseIndex(i);
+    const isTyped = !isGap && letterIndex >= 0 && letterIndex < state.letterIndex;
+    const isHit = isTyped && state.typedResults[letterIndex];
+    const isMiss = isTyped && !state.typedResults[letterIndex];
+    const isNext = i === activePhraseIndex;
 
     if (isHit || isMiss || isNext) {
       ctx.fillStyle = isMiss
         ? "rgba(201, 74, 74, 0.88)"
         : isHit
           ? "rgba(43, 159, 100, 0.86)"
-          : "rgba(255, 139, 66, 0.18)";
+          : "rgba(255, 214, 77, 0.42)";
       roundRect(ctx, x - 5, centerY - 22, width + 10, 44, 12);
       ctx.fill();
     }
 
     if (isNext && !isMiss) {
-      ctx.strokeStyle = "rgba(234, 95, 27, 0.42)";
+      ctx.strokeStyle = "rgba(218, 170, 0, 0.56)";
       ctx.lineWidth = 2;
       roundRect(ctx, x - 5, centerY - 22, width + 10, 44, 12);
       ctx.stroke();
     }
 
-    if (char === " ") {
-      ctx.strokeStyle = isHit ? "rgba(255, 255, 255, 0.82)" : "rgba(22, 50, 68, 0.28)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x + 3, centerY + 13);
-      ctx.lineTo(x + width - 3, centerY + 13);
-      ctx.stroke();
-    } else {
+    if (!isGap) {
       ctx.fillStyle = isHit || isMiss ? "#ffffff" : "#163244";
       ctx.font = `800 ${fontSize}px "Trebuchet MS", sans-serif`;
       ctx.textAlign = "left";
@@ -736,6 +1101,12 @@ function handleKeydown(event) {
     event.preventDefault();
   }
 
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    undoLastCharacter();
+    return;
+  }
+
   handleCharacterInput(key);
 }
 
@@ -747,8 +1118,12 @@ actionButton.addEventListener("click", () => {
   startGame();
 });
 
+difficultySlider.addEventListener("input", syncDifficulty);
+wordCountSlider.addEventListener("input", updateWordCount);
 window.addEventListener("keydown", handleKeydown);
 
+syncDifficulty();
+syncWordCount();
 resetGame();
 cancelAnimationFrame(animationFrame);
 animationFrame = requestAnimationFrame(tick);
