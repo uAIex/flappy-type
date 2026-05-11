@@ -111,6 +111,7 @@ body::after {
 
 .game-toolbar span,
 .difficulty-control,
+.letter-filter-control,
 .burst-readout,
 .repeat-pill,
 button,
@@ -120,6 +121,7 @@ kbd {
 
 .game-toolbar span,
 .difficulty-control,
+.letter-filter-control,
 .burst-readout {
   padding: 10px 14px;
   background: rgba(255, 255, 255, 0.7);
@@ -147,6 +149,39 @@ kbd {
   width: 100%;
   accent-color: #ffd64d;
   cursor: pointer;
+}
+
+.letter-filter-control {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 430px;
+}
+
+.letter-filter-control span {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.letter-filter-control input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: rgba(22, 50, 68, 0.08);
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: 0.04em;
+  outline: 2px solid transparent;
+}
+
+.letter-filter-control input:focus {
+  outline-color: rgba(218, 170, 0, 0.34);
 }
 
 .burst-readout {

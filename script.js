@@ -11,6 +11,7 @@ const difficultySlider = document.getElementById("difficultySlider");
 const difficultyValue = document.getElementById("difficultyValue");
 const wordCountSlider = document.getElementById("wordCountSlider");
 const wordCountValue = document.getElementById("wordCountValue");
+const allowedLettersInput = document.getElementById("allowedLettersInput");
 const wpmBurst = document.getElementById("wpmBurst");
 
 const wordDisplay = document.getElementById("wordDisplay");
@@ -27,6 +28,7 @@ const CONFIG = {
   baseGravity: 280,
   defaultDifficulty: 4,
   defaultWordGroups: 1,
+  defaultAllowedLetters: "abcdefghijklmnopqrstuvwxyz",
   wordsPerGroup: 1000,
   gravityStep: 50,
   flapBoost: 145,
@@ -115,7 +117,12 @@ function shuffle(values) {
 
 function activeWords() {
   const requestedCount = currentWordGroups() * CONFIG.wordsPerGroup;
-  return GOOGLE_10000_WORDS.slice(0, requestedCount);
+  const allowedLetters = new Set(currentAllowedLetters());
+  const words = GOOGLE_10000_WORDS
+    .slice(0, requestedCount)
+    .filter((word) => [...word].every((letter) => allowedLetters.has(letter)));
+
+  return words.length ? words : ["a"];
 }
 
 function refillWordBag() {
@@ -251,6 +258,10 @@ function currentWordGroups() {
   return Number(wordCountSlider.value || CONFIG.defaultWordGroups);
 }
 
+function currentAllowedLetters() {
+  return allowedLettersInput.value || CONFIG.defaultAllowedLetters;
+}
+
 function currentGravity() {
   return CONFIG.baseGravity + (currentDifficulty() - CONFIG.defaultDifficulty) * CONFIG.gravityStep;
 }
@@ -266,6 +277,24 @@ function syncWordCount() {
 function updateWordCount() {
   syncWordCount();
   refillWordBag();
+
+  if (!activeWords().includes(state.currentWord)) {
+    nextWord();
+    syncHud();
+  }
+}
+
+function updateAllowedLetters() {
+  const normalizedLetters = [...new Set(allowedLettersInput.value.toLowerCase().replace(/[^a-z]/g, ""))]
+    .sort()
+    .join("");
+  allowedLettersInput.value = normalizedLetters;
+  refillWordBag();
+
+  if (!activeWords().includes(state.currentWord)) {
+    nextWord();
+    syncHud();
+  }
 }
 
 function targetPhrase() {
@@ -1246,6 +1275,10 @@ function tick(timestamp) {
 }
 
 function handleKeydown(event) {
+  if (event.target === allowedLettersInput) {
+    return;
+  }
+
   const key = event.key.toLowerCase();
 
   if (event.key === "Enter") {
@@ -1280,6 +1313,7 @@ actionButton.addEventListener("click", () => {
 
 difficultySlider.addEventListener("input", syncDifficulty);
 wordCountSlider.addEventListener("input", updateWordCount);
+allowedLettersInput.addEventListener("input", updateAllowedLetters);
 window.addEventListener("keydown", handleKeydown);
 
 syncDifficulty();
