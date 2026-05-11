@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flappy Type</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Typing Game</p>
+          <h1>Flappy Type</h1>
+          <p class="hero-copy">
+            A Flappy Bird-inspired challenge where every correct letter gives your bird a lift.
+            Clear each phrase by typing the word three times with spaces between them, then survive long enough to reach the next one.
+          </p>
+        </div>
+        <div class="hero-badge">
+          <span>Static HTML</span>
+          <span>Vanilla JS</span>
+          <span>GitHub Pages Ready</span>
+        </div>
+      </header>
+
+      <main class="game-layout">
+        <section class="game-panel">
+          <div class="canvas-frame">
+            <canvas
+              id="game"
+              width="960"
+              height="540"
+              aria-label="Flappy Type game canvas"
+            ></canvas>
+
+            <div class="overlay" id="overlay">
+              <div class="overlay-card">
+                <p class="eyebrow" id="overlayLabel">Ready</p>
+                <h2 id="overlayTitle">Start Flying</h2>
+                <p id="overlayText">
+                  Type the full phrase, including spaces. Correct keys lift the bird, and mistakes flash red without moving the target.
+                </p>
+                <button id="actionButton" type="button">Start Game</button>
+                <p class="overlay-tip">Keyboard: letters and <kbd>Space</kbd> to flap, <kbd>Enter</kbd> to restart</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="info-panel">
+          <section class="card">
+            <p class="eyebrow">Current Word</p>
+            <div class="word-row">
+              <span class="word-display" id="wordDisplay">about</span>
+              <span class="repeat-pill">x3</span>
+            </div>
+            <div class="repeat-track" id="repeatTrack" aria-label="Word repetition progress"></div>
+            <p class="card-note">
+              Type the same word three times with spaces between each copy.
+            </p>
+          </section>
+
+          <section class="card">
+            <p class="eyebrow">Letter Progress</p>
+            <div class="next-letter" id="nextLetter">a</div>
+            <div class="typed-display" id="typedDisplay"></div>
+            <p class="card-note">
+              Green marks correct keys. Red marks the current target after a mistype.
+            </p>
+          </section>
+
+          <section class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Words</span>
+              <strong class="stat-value" id="wordsScore">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Pipes</span>
+              <strong class="stat-value" id="pipesScore">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Letters</span>
+              <strong class="stat-value" id="lettersScore">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Best</span>
+              <strong class="stat-value" id="bestScore">0</strong>
+            </div>
+          </section>
+
+          <section class="card controls-card">
+            <p class="eyebrow">How It Works</p>
+            <ul>
+              <li>The bird rises a little for every correct letter.</li>
+              <li>Spaces between repeated words count as targets.</li>
+              <li>Hit a pipe or the ground and the run ends.</li>
+              <li>The word pool uses 500 common English words.</li>
+            </ul>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script src="words.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
