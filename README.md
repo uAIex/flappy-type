@@ -1,5 +1,4 @@
-[https://uaiex.github.io/flappy-type/
-](https://uaiex.github.io/flappy-type/)
+
 # Flappy Type
 
 A small Flappy Bird-inspired typing game built with plain HTML, CSS, and JavaScript.
